@@ -34,37 +34,6 @@
 
 <br/>
 
-<h3 align="center">Get started</h3>
-
-```sh
-pip install -U --pre cocoindex     # v1 is in preview — the --pre flag is required
-```
-
-Declare *what* should be in your target — CocoIndex keeps it in sync forever, recomputing only the Δ.
-
-```python
-import cocoindex as coco
-from cocoindex.connectors import localfs, postgres
-from cocoindex.ops.text import RecursiveSplitter
-
-@coco.fn(memo=True)                          # ← cached by hash(input) + hash(code)
-async def index_file(file, table):
-    for chunk in RecursiveSplitter().split(await file.read_text()):
-        table.declare_row(text=chunk.text, embedding=embed(chunk.text))
-
-@coco.fn
-async def main(src):
-    table = await postgres.mount_table_target(PG, table_name="docs")
-    table.declare_vector_index(column="embedding")
-    await coco.mount_each(index_file, localfs.walk_dir(src).items(), table)
-
-coco.App(coco.AppConfig(name="docs"), main, src="./docs").update_blocking()
-```
-
-<p align="center">Run once to backfill. Re-run anytime — only the changed files re-embed.</p>
-
-<br/><br/>
-
 <h2 align="center">Built with CocoIndex ❤️</h2>
 
 <p align="center">
