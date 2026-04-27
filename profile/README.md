@@ -1,9 +1,11 @@
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://cocoindex.io/blobs/github/homepage/enterprise-hero-dark.svg">
-    <source media="(prefers-color-scheme: light)" srcset="https://cocoindex.io/blobs/github/homepage/enterprise-hero-light.svg">
-    <img src="https://cocoindex.io/blobs/github/homepage/enterprise-hero-light.svg" alt="Enterprise corpus — codebase, Slack, meeting notes, and documentation — flowing continuously through the CocoIndex incremental sync engine into a production AI agent with always-fresh context. Only the Δ (delta) is reprocessed on every change." width="100%" draggable="false"/>
-  </picture>
+  <a href="https://github.com/cocoindex-io/cocoindex" title="CocoIndex on GitHub">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://cocoindex.io/blobs/github/homepage/enterprise-hero-dark.svg">
+      <source media="(prefers-color-scheme: light)" srcset="https://cocoindex.io/blobs/github/homepage/enterprise-hero-light.svg">
+      <img src="https://cocoindex.io/blobs/github/homepage/enterprise-hero-light.svg" alt="Enterprise corpus — codebase, Slack, meeting notes, and documentation — flowing continuously through the CocoIndex incremental sync engine into a production AI agent with always-fresh context. Only the Δ (delta) is reprocessed on every change." width="100%" draggable="false"/>
+    </picture>
+  </a>
 </p>
 <h1 align="center">Your agents deserve <em>fresh context.</em></h1>
 
