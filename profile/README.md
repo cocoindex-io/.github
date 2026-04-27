@@ -141,13 +141,6 @@
 
 <br/>
 
-| Codebase Indexing | Auto-Updating Knowledge Graph from Meeting Notes |
-|-------------------|--------------------------------------------------|
-| <img width="500" src="https://github.com/user-attachments/assets/d89f030a-1b03-4c87-b45c-ed253bff235c" alt="codebase indexing" /> | <img width="500" src="https://github.com/user-attachments/assets/e24563a0-c930-4c92-94b1-432c41155e64" alt="auto-updating knowledge graph" /> |
-| [**Fork & Go: Realtime Codebase Indexing**](https://github.com/cocoindex-io/realtime-codebase-indexing) | [**Fork & Go: Meeting Notes Knowledge Graph**](https://github.com/cocoindex-io/meeting-notes-knowledge-graph) |
-
-<br/>
-
 <p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="https://cocoindex.io/blobs/github/homepage/share-build-dark.svg"><source media="(prefers-color-scheme: light)" srcset="https://cocoindex.io/blobs/github/homepage/share-build-light.svg"><img src="https://cocoindex.io/blobs/github/homepage/share-build-light.svg" alt="Share what you build" height="36" draggable="false"/></picture></p>
 
 <p align="center">Building something with CocoIndex? <b>We want to see it.</b><br/>Tag <a href="https://x.com/cocoindex_io">@cocoindex_io</a> on X or drop a link in <a href="https://discord.com/invite/zpA9S2DR7s">#showcase</a> on Discord. We'll boost it. 🥥</p>
