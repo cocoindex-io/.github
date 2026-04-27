@@ -63,6 +63,16 @@ coco.App(coco.AppConfig(name="docs"), main, src="./docs").update_blocking()
 
 <p align="center">Run once to backfill. Re-run anytime — only the changed files re-embed.</p>
 
+<br/><br/>
+
+<h2 align="center">Built with CocoIndex ❤️</h2>
+
+<p align="center">
+  <a href="https://cocoindex.io/cocoindex-code" title="CocoIndex-code — flagship MCP server for AI coding agents: AST-aware, incremental, semantic code index. Claude Code and Cursor see your whole repo instantly."><picture><source media="(prefers-color-scheme: dark)" srcset="https://cocoindex.io/blobs/github/homepage/cocoindex-code-hero-dark.svg"><source media="(prefers-color-scheme: light)" srcset="https://cocoindex.io/blobs/github/homepage/cocoindex-code-hero-light.svg"><img src="https://cocoindex.io/blobs/github/homepage/cocoindex-code-hero-light.svg" alt="CocoIndex-code — flagship MCP server for AI coding agents. AST-aware incremental semantic code index that keeps live call graphs, symbols, vectors, and chunks fresh on every commit. 70% fewer tokens per turn, 80-90% cache hits on re-index, sub-second freshness. Supports Python, TypeScript, Rust, and Go. Features: Δ-only incremental processing, semantic search by meaning (not grep), call graphs and blast-radius analysis, global repo view for duplicates and architecture. Build coding agents (generate, refactor) and code-review agents (catch, approve). One install — Claude Code, Cursor, and other MCP-aware agents see your whole repository instantly. Keywords: MCP server, coding agent, code intelligence, AST chunking, semantic code search, call graph, vector embedding, repository context, Claude Code, Cursor, incremental indexing, blast radius." width="100%"/></picture></a>
+</p>
+
+<p align="center"><a href="https://github.com/cocoindex-io/cocoindex/tree/v1/examples"><b>See all 20+ examples · updated every week →</b></a></p>
+
 <br/>
 
 <h2 align="center">What can you <em>build?</em></h2>
