@@ -107,37 +107,40 @@
 
 <p align="center"><b>Working starters from <a href="https://github.com/cocoindex-io/cocoindex/tree/v1/examples">the examples tree</a> — clone, plug your source, ship.</b></p>
 
-<p align="center">
-  <a href="https://github.com/cocoindex-io/cocoindex/tree/v1/examples/code_embedding" title="Real-time code index"><img src="https://cocoindex.io/blobs/github/homepage/example-code.svg" alt="Real-time code index — walk a git repo, AST-chunk source files, embed with sentence-transformers, upsert to pgvector / LanceDB, incremental on every commit." width="70%"/></a>
-</p>
-
-<p align="center">
-  <a href="https://github.com/cocoindex-io/cocoindex/tree/v1/examples/pdf_embedding" title="PDF → RAG index"><img src="https://cocoindex.io/blobs/github/homepage/example-pdf.svg" alt="PDF → RAG index — ingest PDFs from local, S3, or GDrive, extract + chunk text, embed chunks, upsert to pgvector / LanceDB. Classic retrieval-augmented-generation stack, incremental." width="70%"/></a>
-</p>
-
-<p align="center">
-  <a href="https://github.com/cocoindex-io/cocoindex/tree/v1/examples/hn_trending_topics" title="HN trending topics"><img src="https://cocoindex.io/blobs/github/homepage/example-hn-trending.svg" alt="HN trending topics — pull Hacker News threads via Algolia, recursively parse comments, LLM-extract topics with Gemini 2.5 Flash, rank by weighted hit count, store in Postgres. Incremental." width="70%"/></a>
-</p>
-
-<p align="center">
-  <a href="https://github.com/cocoindex-io/cocoindex/tree/v1/examples/conversation_to_knowledge" title="Conversation → knowledge graph"><img src="https://cocoindex.io/blobs/github/homepage/example-kg.svg" alt="Conversation → knowledge graph — LLM extracts people, topics, decisions, action items from transcripts and upserts into Neo4j / Kuzu. Live graph, incremental." width="70%"/></a>
-</p>
-
-<p align="center">
-  <a href="https://github.com/cocoindex-io/cocoindex/tree/v1/examples/multi_codebase_summarization" title="Multi-repo summarization"><img src="https://cocoindex.io/blobs/github/homepage/example-multicode.svg" alt="Multi-repo summarization — walk N git repos, extract structure, LLM-summarize per-repo + a rolled-up org summary, refresh on every push." width="70%"/></a>
-</p>
-
-<p align="center">
-  <a href="https://github.com/cocoindex-io/cocoindex/tree/v1/examples/patient_intake_extraction_baml" title="Structured extraction"><img src="https://cocoindex.io/blobs/github/homepage/example-intake.svg" alt="Structured extraction — BAML / DSPy typed schema extraction from forms, PDFs, intakes, invoices into Postgres / warehouse. Incremental." width="70%"/></a>
-</p>
-
-<p align="center">
-  <a href="https://github.com/cocoindex-io/cocoindex/tree/v1/examples/conversation_to_knowledge" title="Podcast → knowledge graph"><img src="https://cocoindex.io/blobs/github/homepage/example-podcast.svg" alt="Podcast → knowledge graph — transcribe YouTube / Spotify audio with speaker diarization, LLM-extract speakers and statements, resolve entities across episodes, store in SurrealDB / Neo4j." width="70%"/></a>
-</p>
-
-<p align="center">
-  <a href="https://github.com/cocoindex-io/cocoindex/tree/v1/examples/csv_to_kafka" title="CSV → Kafka live"><img src="https://cocoindex.io/blobs/github/homepage/example-csv-kafka.svg" alt="CSV → Kafka live — watch a folder of CSV files, publish each row as a JSON message to a Kafka topic via CocoIndex's Kafka target connector. Incremental, sub-second, no producer loop." width="70%"/></a>
-</p>
+<table width="100%" border="0" cellspacing="0" role="presentation">
+  <tr>
+    <td align="center" valign="middle" width="50%">
+      <a href="https://github.com/cocoindex-io/cocoindex/tree/v1/examples/code_embedding" title="Real-time code index"><img src="https://cocoindex.io/blobs/github/homepage/example-code.svg" alt="Real-time code index — walk a git repo, AST-chunk source files, embed with sentence-transformers, upsert to pgvector / LanceDB, incremental on every commit." width="100%"/></a>
+    </td>
+    <td align="center" valign="middle" width="50%">
+      <a href="https://github.com/cocoindex-io/cocoindex/tree/v1/examples/pdf_embedding" title="PDF → RAG index"><img src="https://cocoindex.io/blobs/github/homepage/example-pdf.svg" alt="PDF → RAG index — ingest PDFs from local, S3, or GDrive, extract + chunk text, embed chunks, upsert to pgvector / LanceDB. Classic retrieval-augmented-generation stack, incremental." width="100%"/></a>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" valign="middle" width="50%">
+      <a href="https://github.com/cocoindex-io/cocoindex/tree/v1/examples/hn_trending_topics" title="HN trending topics"><img src="https://cocoindex.io/blobs/github/homepage/example-hn-trending.svg" alt="HN trending topics — pull Hacker News threads via Algolia, recursively parse comments, LLM-extract topics with Gemini 2.5 Flash, rank by weighted hit count, store in Postgres. Incremental." width="100%"/></a>
+    </td>
+    <td align="center" valign="middle" width="50%">
+      <a href="https://github.com/cocoindex-io/cocoindex/tree/v1/examples/conversation_to_knowledge" title="Conversation → knowledge graph"><img src="https://cocoindex.io/blobs/github/homepage/example-kg.svg" alt="Conversation → knowledge graph — LLM extracts people, topics, decisions, action items from transcripts and upserts into Neo4j / Kuzu. Live graph, incremental." width="100%"/></a>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" valign="middle" width="50%">
+      <a href="https://github.com/cocoindex-io/cocoindex/tree/v1/examples/multi_codebase_summarization" title="Multi-repo summarization"><img src="https://cocoindex.io/blobs/github/homepage/example-multicode.svg" alt="Multi-repo summarization — walk N git repos, extract structure, LLM-summarize per-repo + a rolled-up org summary, refresh on every push." width="100%"/></a>
+    </td>
+    <td align="center" valign="middle" width="50%">
+      <a href="https://github.com/cocoindex-io/cocoindex/tree/v1/examples/patient_intake_extraction_baml" title="Structured extraction"><img src="https://cocoindex.io/blobs/github/homepage/example-intake.svg" alt="Structured extraction — BAML / DSPy typed schema extraction from forms, PDFs, intakes, invoices into Postgres / warehouse. Incremental." width="100%"/></a>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" valign="middle" width="50%">
+      <a href="https://github.com/cocoindex-io/cocoindex/tree/v1/examples/conversation_to_knowledge" title="Podcast → knowledge graph"><img src="https://cocoindex.io/blobs/github/homepage/example-podcast.svg" alt="Podcast → knowledge graph — transcribe YouTube / Spotify audio with speaker diarization, LLM-extract speakers and statements, resolve entities across episodes, store in SurrealDB / Neo4j." width="100%"/></a>
+    </td>
+    <td align="center" valign="middle" width="50%">
+      <a href="https://github.com/cocoindex-io/cocoindex/tree/v1/examples/csv_to_kafka" title="CSV → Kafka live"><img src="https://cocoindex.io/blobs/github/homepage/example-csv-kafka.svg" alt="CSV → Kafka live — watch a folder of CSV files, publish each row as a JSON message to a Kafka topic via CocoIndex's Kafka target connector. Incremental, sub-second, no producer loop." width="100%"/></a>
+    </td>
+  </tr>
+</table>
 
 <br/>
 
