@@ -1,0 +1,38 @@
+name: CI conformance
+
+# The ci-merge-queue organization ruleset (rulesets/ci-merge-queue.json)
+# requires this workflow on every repository whose ci-tier property is
+# merge-queue. It runs from this repository, on the target repository's pull
+# requests and merge groups, and checks the target's workflows against CI.md.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, stacked]
+  merge_group:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number && format('pr-{0}', github.event.pull_request.number) || github.run_id }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ci-conformance:
+    # This repository has no ci-gate of its own; self-test.yml covers it.
+    if: github.event.pull_request.draft != true && github.repository != 'cocoindex-io/.github'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          path: target
+          sparse-checkout: .github/workflows
+      - uses: actions/checkout@v5
+        with:
+          repository: cocoindex-io/.github
+          ref: v1
+          path: kit
+          sparse-checkout: scripts
+      - uses: astral-sh/setup-uv@v7
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: uv run --no-project --with pyyaml==6.0.3 kit/scripts/check_ci_conformance.py target --repo "$GITHUB_REPOSITORY"

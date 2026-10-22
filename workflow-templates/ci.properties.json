@@ -1,0 +1,6 @@
+{
+  "name": "CocoIndex CI",
+  "description": "The CocoIndex CI shape: a fast tier on pull requests, the full tier in the merge queue, and a ci-gate check to require. See CI.md.",
+  "iconName": "octicon check-circle",
+  "categories": ["Python", "Rust"]
+}
