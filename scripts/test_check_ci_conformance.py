@@ -125,3 +125,9 @@ jobs:
 """)
     problems = required_check_problems(["pre-commit (3.11)"], [doc])
     assert len(problems) == 1 and "Require ci-gate instead" in problems[0]
+
+
+def test_status_function_overrides_inherited_draft_skip() -> None:
+    doc = template()
+    doc["jobs"]["test"]["if"] = "!cancelled()"
+    assert any("Job test must skip drafts" in m for m in messages(doc))

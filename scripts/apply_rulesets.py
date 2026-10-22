@@ -69,7 +69,10 @@ def sync_property(org: str, check: bool) -> bool:
 
 def sync_ruleset(org: str, path: pathlib.Path, check: bool) -> bool:
     want = json.loads(path.read_text())
-    existing = {r["name"]: r["id"] for r in gh(f"orgs/{org}/rulesets", "--paginate")}
+    # `--slurp` wraps the pages in one array; `--paginate` alone prints one
+    # JSON array per page, which is not one JSON document.
+    pages = gh(f"orgs/{org}/rulesets", "--paginate", "--slurp")
+    existing = {r["name"]: r["id"] for page in pages for r in page}
     if want["name"] in existing:
         have = gh(f"orgs/{org}/rulesets/{existing[want['name']]}")
         found = differences(want, have)

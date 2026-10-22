@@ -78,7 +78,11 @@ def check_workflow(path: str, doc: dict[Any, Any]) -> list[Finding]:
                  "with cancel-in-progress, must cancel a pull request's superseded runs.")
         for job_id, job in jobs.items():
             condition = _text(job.get("if"))
-            inherits_skip = bool(job.get("needs")) and "always()" not in condition
+            # A job that needs a skipped job is skipped too, unless a status
+            # function in its `if` overrides the implicit success() check.
+            inherits_skip = bool(job.get("needs")) and not any(
+                f in condition for f in ("always()", "cancelled()", "failure()")
+            )
             if "pull_request.draft" not in condition and not inherits_skip:
                 fail(f"Job {job_id} must skip drafts: add `github.event.pull_request.draft != true` to its if.")
 
