@@ -108,19 +108,32 @@ def check_workflow(path: str, doc: dict[Any, Any]) -> list[Finding]:
     return findings
 
 
-def check_name_prefixes(doc: dict[Any, Any]) -> list[str]:
-    """Return the check-name prefixes the workflow's jobs report under."""
-    prefixes = []
-    for job_id, job in (doc.get("jobs") or {}).items():
-        name = _text(job.get("name")) or job_id
-        prefixes.append(name.split("${{")[0].strip())
-    return prefixes
+def _check_name_prefix(job_id: str, job: dict[str, Any]) -> str:
+    """The prefix of the check names a job reports under."""
+    return (_text(job.get("name")) or job_id).split("${{")[0].strip()
 
 
-def check_required_contexts(contexts: list[str], merge_group_docs: list[dict[Any, Any]]) -> list[str]:
-    """Return the required contexts that no merge_group workflow reports."""
-    prefixes = [p for doc in merge_group_docs for p in check_name_prefixes(doc)]
-    return [c for c in contexts if not any(p and c.startswith(p) for p in prefixes)]
+def required_check_problems(contexts: list[str], merge_group_docs: list[dict[Any, Any]]) -> list[str]:
+    """Explain each required context that would leave a pull request or merge group waiting."""
+    problems = []
+    for context in contexts:
+        jobs = [
+            (job_id, job)
+            for doc in merge_group_docs
+            for job_id, job in (doc.get("jobs") or {}).items()
+            if (prefix := _check_name_prefix(job_id, job)) and context.startswith(prefix)
+        ]
+        if not jobs:
+            problems.append(f"Required check {context!r} comes from no workflow that triggers on merge_group, "
+                            "so the merge queue would wait for it forever.")
+            continue
+        # A skipped matrix job reports one check under its unexpanded name, so
+        # a required `name (value)` check never arrives on a fast-tier run.
+        if all((job.get("strategy") or {}).get("matrix") and "outputs.full" in _text(job.get("if"))
+               for _, job in jobs):
+            problems.append(f"Required check {context!r} comes from matrix job {jobs[0][0]}, which the fast tier "
+                            f"skips; a skipped matrix job never reports that name. Require {GATE_JOB} instead.")
+    return problems
 
 
 def required_contexts(repo: str) -> list[str] | None:
@@ -170,9 +183,8 @@ def main() -> int:
         findings.append(Finding(str(directory), f"Exactly one workflow must define {GATE_JOB}; found {len(gate_files)}."))
     if args.repo:
         contexts = required_contexts(args.repo)
-        for context in check_required_contexts(contexts or [], merge_group_docs):
-            findings.append(Finding(str(directory), f"Required check {context!r} comes from no workflow that "
-                                    "triggers on merge_group, so the merge queue would wait for it forever."))
+        for problem in required_check_problems(contexts or [], merge_group_docs):
+            findings.append(Finding(str(directory), problem))
 
     annotate = os.environ.get("GITHUB_ACTIONS") == "true"
     for finding in findings:

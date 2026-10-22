@@ -4,7 +4,7 @@ import pathlib
 
 import yaml
 
-from check_ci_conformance import check_required_contexts, check_workflow
+from check_ci_conformance import check_workflow, required_check_problems
 
 TEMPLATE = pathlib.Path(__file__).parent.parent / "workflow-templates" / "ci.yml"
 
@@ -109,4 +109,19 @@ jobs:
     runs-on: x
 """)
     contexts = ["ci-gate", "pre-commit (3.11)", "rust-checks (ubuntu-latest)", "fast-check"]
-    assert check_required_contexts(contexts, [doc]) == ["fast-check"]
+    problems = required_check_problems(contexts, [doc])
+    assert len(problems) == 1 and "'fast-check'" in problems[0]
+
+
+def test_required_check_from_tier_skipped_matrix_job() -> None:
+    doc = yaml.safe_load("""
+on: [merge_group]
+jobs:
+  pre-commit:
+    needs: changes
+    if: needs.changes.outputs.full == 'true'
+    strategy: {matrix: {python-version: ['3.11']}}
+    runs-on: x
+""")
+    problems = required_check_problems(["pre-commit (3.11)"], [doc])
+    assert len(problems) == 1 and "Require ci-gate instead" in problems[0]

@@ -57,7 +57,10 @@ workflow has all of them.
 Every other workflow that runs on pull requests has parts 2 and 3, the
 `ready_for_review` type, and the `stacked` type when it filters on branches.
 Every workflow that reports a required check triggers on `merge_group`, or
-the queue waits for that check until it times out.
+the queue waits for that check until it times out. Require `ci-gate`, plus
+checks from jobs that run in every tier, such as `fast-check`. A matrix job
+that the tier skips reports one check under its unexpanded name, so a
+required `name (value)` check from it never arrives.
 
 ## The merge queue
 
