@@ -4,9 +4,17 @@
     scripts/apply_rulesets.py --check   # exit 1 when GitHub differs from rulesets/
     scripts/apply_rulesets.py           # create or update to match rulesets/
 
+- rulesets/ci-tier-property.json: the `ci-tier` custom property.
+- rulesets/org/*.json: organization rulesets.
+- rulesets/repo/*.json: repository rulesets, put on every repository whose
+  `ci-tier` is `merge-queue`. GitHub doesn't accept a merge-queue rule in an
+  organization ruleset, so the queue lives here.
+
 Needs the `gh` CLI signed in as an organization owner with the admin:org scope
 (`gh auth refresh -h github.com -s admin:org`). Org-setting changes follow the
-Change Management Policy: announce them when made.
+Change Management Policy: announce them when made. A repository that leaves
+the queue (its property unset) keeps its `merge-queue` ruleset until someone
+deletes it: `gh api -X DELETE repos/<owner>/<name>/rulesets/<id>`.
 """
 
 from __future__ import annotations
@@ -20,6 +28,7 @@ from typing import Any
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent / "rulesets"
 PROPERTY_FILE = ROOT / "ci-tier-property.json"
+OPT_IN_VALUE = "merge-queue"
 
 
 def gh(*args: str, payload: dict[str, Any] | None = None) -> Any:
@@ -33,6 +42,12 @@ def gh(*args: str, payload: dict[str, Any] | None = None) -> Any:
     if result.returncode != 0:
         sys.exit(f"gh api {' '.join(args)} failed: {result.stderr.strip() or result.stdout.strip()}")
     return json.loads(result.stdout) if result.stdout.strip() else None
+
+
+def gh_list(endpoint: str) -> list[Any]:
+    # `--slurp` wraps the pages in one array; `--paginate` alone prints one
+    # JSON array per page, which is not one JSON document.
+    return [item for page in gh(endpoint, "--paginate", "--slurp") for item in page]
 
 
 def differences(want: Any, have: Any, where: str = "") -> list[str]:
@@ -51,8 +66,16 @@ def differences(want: Any, have: Any, where: str = "") -> list[str]:
     return [] if want == have else [f"{where}: expected {json.dumps(want)}, found {json.dumps(have)}"]
 
 
-def sync_property(org: str, check: bool) -> bool:
-    want = json.loads(PROPERTY_FILE.read_text())
+def opted_in(property_values: list[dict[str, Any]], property_name: str) -> list[str]:
+    """The repositories whose `property_name` is the opt-in value."""
+    return sorted(
+        repo["repository_name"]
+        for repo in property_values
+        if any(p["property_name"] == property_name and p["value"] == OPT_IN_VALUE for p in repo["properties"])
+    )
+
+
+def sync_property(org: str, want: dict[str, Any], check: bool) -> bool:
     have = {p["property_name"]: p for p in gh(f"orgs/{org}/properties/schema")}.get(want["property_name"])
     found = differences(want, have) if have else ["missing"]
     if not found:
@@ -67,28 +90,27 @@ def sync_property(org: str, check: bool) -> bool:
     return True
 
 
-def sync_ruleset(org: str, path: pathlib.Path, check: bool) -> bool:
-    want = json.loads(path.read_text())
-    # `--slurp` wraps the pages in one array; `--paginate` alone prints one
-    # JSON array per page, which is not one JSON document.
-    pages = gh(f"orgs/{org}/rulesets", "--paginate", "--slurp")
-    existing = {r["name"]: r["id"] for page in pages for r in page}
+def sync_ruleset(scope: str, want: dict[str, Any], check: bool) -> bool:
+    """Make the ruleset named `want["name"]` under `scope` (orgs/<org> or repos/<owner>/<name>) match `want`."""
+    label = f"{scope} ruleset {want['name']}"
+    # A repository's list includes the organization's rulesets unless told not to.
+    listing = f"{scope}/rulesets" + ("?includes_parents=false" if scope.startswith("repos/") else "")
+    existing = {r["name"]: r["id"] for r in gh_list(listing)}
     if want["name"] in existing:
-        have = gh(f"orgs/{org}/rulesets/{existing[want['name']]}")
-        found = differences(want, have)
+        found = differences(want, gh(f"{scope}/rulesets/{existing[want['name']]}"))
         if not found:
-            print(f"ruleset {want['name']}: up to date")
+            print(f"{label}: up to date")
             return True
-        print(f"ruleset {want['name']}: " + "; ".join(found))
+        print(f"{label}: " + "; ".join(found))
         if check:
             return False
-        gh("-X", "PUT", f"orgs/{org}/rulesets/{existing[want['name']]}", payload=want)
+        gh("-X", "PUT", f"{scope}/rulesets/{existing[want['name']]}", payload=want)
     else:
-        print(f"ruleset {want['name']}: missing")
+        print(f"{label}: missing")
         if check:
             return False
-        gh("-X", "POST", f"orgs/{org}/rulesets", payload=want)
-    print(f"ruleset {want['name']}: applied")
+        gh("-X", "POST", f"{scope}/rulesets", payload=want)
+    print(f"{label}: applied")
     return True
 
 
@@ -97,11 +119,16 @@ def main() -> int:
     parser.add_argument("--org", default="cocoindex-io")
     parser.add_argument("--check", action="store_true", help="report drift and exit 1 instead of applying")
     args = parser.parse_args()
-    # The property comes first: a ruleset's repository_property condition names it.
-    ok = sync_property(args.org, args.check)
-    for path in sorted(ROOT.glob("*.json")):
-        if path != PROPERTY_FILE:
-            ok = sync_ruleset(args.org, path, args.check) and ok
+    prop = json.loads(PROPERTY_FILE.read_text())
+    # The property comes first: the organization ruleset's condition names it.
+    ok = sync_property(args.org, prop, args.check)
+    for path in sorted((ROOT / "org").glob("*.json")):
+        ok = sync_ruleset(f"orgs/{args.org}", json.loads(path.read_text()), args.check) and ok
+    repos = opted_in(gh_list(f"orgs/{args.org}/properties/values"), prop["property_name"])
+    print(f"repositories with {prop['property_name']}={OPT_IN_VALUE}: {', '.join(repos) or 'none'}")
+    for repo in repos:
+        for path in sorted((ROOT / "repo").glob("*.json")):
+            ok = sync_ruleset(f"repos/{args.org}/{repo}", json.loads(path.read_text()), args.check) and ok
     return 0 if ok else 1
 
 
