@@ -4,9 +4,13 @@ name: CI conformance
 # requires this workflow on every repository whose ci-tier property is
 # merge-queue. It runs from this repository, on the target repository's pull
 # requests and merge groups, and checks the target's workflows against CI.md.
+#
+# A ruleset runs a required workflow on the default activity types only
+# (opened, synchronize, reopened, and the merge group's checks_requested) and
+# ignores `types` and other filters. So the job runs on drafts too: a draft
+# marked ready gets no new event, and the check is cheap.
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review, stacked]
   merge_group:
 
 concurrency:
@@ -19,7 +23,7 @@ permissions:
 jobs:
   ci-conformance:
     # This repository has no ci-gate of its own; self-test.yml covers it.
-    if: github.event.pull_request.draft != true && github.repository != 'cocoindex-io/.github'
+    if: github.repository != 'cocoindex-io/.github'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5

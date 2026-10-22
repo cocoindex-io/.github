@@ -49,7 +49,11 @@ workflow has all of them.
    in its `if`, or needs a job that has it.
 4. **A `changes` job** runs `cocoindex-io/.github/actions/ci-mode@v1` (it
    needs `checks: read`) and the path filter. Expensive jobs run when
-   `full == 'true'` and the filter output is not `'false'`.
+   `full == 'true'` and the filter output is not `'false'`. The filter is
+   skipped for a stack layer, and so is any other diff against the pull
+   request's base branch: a stack layer's base is the layer below it, but
+   the top layer's run stands in for the whole stack. Diff a stack layer
+   against `github.event.pull_request.stack.base.ref`.
 5. **A `ci-gate` job** with `if: always()` that needs every other job. It is
    the one check to require. A skipped job reports success, so a required
    check that can be skipped by a failure would let the failure merge.
@@ -124,6 +128,10 @@ repository's own rulesets.
   the Change Management Policy asks that the change be announced.
 - Check a repository locally:
   `uv run --with pyyaml scripts/check_ci_conformance.py PATH --repo OWNER/NAME`.
+- A ruleset runs a required workflow only on `opened`, `synchronize` and
+  `reopened` pull request events and on merge groups, and ignores the
+  workflow's `types` and filters. `ci-conformance` therefore runs on drafts
+  too.
 
 ## Changing this kit
 

@@ -131,3 +131,56 @@ def test_status_function_overrides_inherited_draft_skip() -> None:
     doc = template()
     doc["jobs"]["test"]["if"] = "!cancelled()"
     assert any("Job test must skip drafts" in m for m in messages(doc))
+
+
+def test_short_form_concurrency() -> None:
+    doc = template()
+    doc["concurrency"] = "ci-${{ github.event.pull_request.number }}"
+    assert any("cancel-in-progress" in m for m in messages(doc))
+
+
+def test_required_check_match_is_exact_or_expanded() -> None:
+    doc = yaml.safe_load("""
+on: [merge_group]
+jobs:
+  test: {runs-on: x}
+""")
+    problems = required_check_problems(["test-e2e"], [doc])
+    assert len(problems) == 1 and "no workflow that triggers on merge_group" in problems[0]
+
+
+def test_required_check_from_tier_skipped_reusable_workflow() -> None:
+    doc = yaml.safe_load("""
+on: [merge_group]
+jobs:
+  changes: {runs-on: x}
+  build-test:
+    name: Build & Test
+    needs: changes
+    if: needs.changes.outputs.full == 'true' && needs.changes.outputs.build-test != 'false'
+    uses: ./.github/workflows/_test.yml
+""")
+    problems = required_check_problems(["Build & Test / build-test (ubuntu-latest)", "changes"], [doc])
+    assert len(problems) == 1 and "Build & Test / build-test" in problems[0]
+
+
+def test_required_check_from_job_skipped_through_needs() -> None:
+    doc = yaml.safe_load("""
+on: [merge_group]
+jobs:
+  changes: {runs-on: x}
+  build:
+    needs: changes
+    if: needs.changes.outputs.full == 'true'
+    runs-on: x
+  test:
+    needs: build
+    strategy: {matrix: {os: [a]}}
+    runs-on: x
+  report:
+    needs: test
+    if: always()
+    runs-on: x
+""")
+    problems = required_check_problems(["test (a)", "report", "build"], [doc])
+    assert len(problems) == 1 and "'test (a)'" in problems[0]

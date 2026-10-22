@@ -25,6 +25,9 @@ import yaml
 CI_MODE_ACTION = "cocoindex-io/.github/actions/ci-mode@"
 GATE_JOB = "ci-gate"
 GITHUB_ACTIONS_APP_ID = 15368
+# Status functions in a job's `if` replace the implicit success() check, so
+# the job runs even when a job it needs was skipped.
+STATUS_FUNCTIONS = ("always()", "cancelled()", "failure()")
 
 
 class Finding(NamedTuple):
@@ -71,8 +74,11 @@ def check_workflow(path: str, doc: dict[Any, Any]) -> list[Finding]:
         if (has_gate or branch_filtered) and "stacked" not in types:
             fail("pull_request.types must list stacked: a stack layer whose opened event arrives before its "
                  "stack exists misses the branch filter and runs no CI.")
-        group = _text((doc.get("concurrency") or {}).get("group"))
-        cancel = (doc.get("concurrency") or {}).get("cancel-in-progress")
+        concurrency = doc.get("concurrency") or {}
+        if isinstance(concurrency, str):  # `concurrency: <group>` is the short form
+            concurrency = {"group": concurrency}
+        group = _text(concurrency.get("group"))
+        cancel = concurrency.get("cancel-in-progress")
         if "pull_request.number" not in group or cancel in (None, False):
             fail("A workflow-level concurrency group keyed on github.event.pull_request.number, "
                  "with cancel-in-progress, must cancel a pull request's superseded runs.")
@@ -80,9 +86,7 @@ def check_workflow(path: str, doc: dict[Any, Any]) -> list[Finding]:
             condition = _text(job.get("if"))
             # A job that needs a skipped job is skipped too, unless a status
             # function in its `if` overrides the implicit success() check.
-            inherits_skip = bool(job.get("needs")) and not any(
-                f in condition for f in ("always()", "cancelled()", "failure()")
-            )
+            inherits_skip = bool(job.get("needs")) and not any(f in condition for f in STATUS_FUNCTIONS)
             if "pull_request.draft" not in condition and not inherits_skip:
                 fail(f"Job {job_id} must skip drafts: add `github.event.pull_request.draft != true` to its if.")
 
@@ -112,31 +116,55 @@ def check_workflow(path: str, doc: dict[Any, Any]) -> list[Finding]:
     return findings
 
 
-def _check_name_prefix(job_id: str, job: dict[str, Any]) -> str:
-    """The prefix of the check names a job reports under."""
-    return (_text(job.get("name")) or job_id).split("${{")[0].strip()
+def _needs(job: dict[str, Any]) -> list[str]:
+    needs = job.get("needs") or []
+    return [needs] if isinstance(needs, str) else list(needs)
+
+
+def _tier_skipped_jobs(jobs: dict[str, Any]) -> set[str]:
+    """Jobs a fast-tier run skips: those whose `if` reads the tier, and those that need one."""
+    skipped = {job_id for job_id, job in jobs.items() if "outputs.full" in _text(job.get("if"))}
+    grew = True
+    while grew:
+        grew = False
+        for job_id, job in jobs.items():
+            if (job_id not in skipped and any(n in skipped for n in _needs(job))
+                    and not any(f in _text(job.get("if")) for f in STATUS_FUNCTIONS)):
+                skipped.add(job_id)
+                grew = True
+    return skipped
+
+
+def _reports(job_id: str, job: dict[str, Any], context: str) -> bool:
+    """Whether the job reports `context`: as its name, a matrix leg `name (…)`, or a reusable workflow's `name / …`."""
+    name = _text(job.get("name")) or job_id
+    if "${{" in name:
+        return context.startswith(name.split("${{")[0])
+    return context == name or context.startswith((f"{name} (", f"{name} / "))
 
 
 def required_check_problems(contexts: list[str], merge_group_docs: list[dict[Any, Any]]) -> list[str]:
     """Explain each required context that would leave a pull request or merge group waiting."""
     problems = []
     for context in contexts:
-        jobs = [
-            (job_id, job)
-            for doc in merge_group_docs
-            for job_id, job in (doc.get("jobs") or {}).items()
-            if (prefix := _check_name_prefix(job_id, job)) and context.startswith(prefix)
-        ]
-        if not jobs:
+        producers = []  # (job id, skipped by the fast tier, the name it reports when skipped)
+        for doc in merge_group_docs:
+            jobs: dict[str, Any] = doc.get("jobs") or {}
+            skipped = _tier_skipped_jobs(jobs)
+            producers += [
+                (job_id, job_id in skipped, _text(job.get("name")) or job_id)
+                for job_id, job in jobs.items()
+                if _reports(job_id, job, context)
+            ]
+        if not producers:
             problems.append(f"Required check {context!r} comes from no workflow that triggers on merge_group, "
                             "so the merge queue would wait for it forever.")
-            continue
-        # A skipped matrix job reports one check under its unexpanded name, so
-        # a required `name (value)` check never arrives on a fast-tier run.
-        if all((job.get("strategy") or {}).get("matrix") and "outputs.full" in _text(job.get("if"))
-               for _, job in jobs):
-            problems.append(f"Required check {context!r} comes from matrix job {jobs[0][0]}, which the fast tier "
-                            f"skips; a skipped matrix job never reports that name. Require {GATE_JOB} instead.")
+        # A skipped job reports one check under its own name: a skipped matrix
+        # job doesn't expand into its legs, and a skipped reusable-workflow
+        # call reports none of the called workflow's jobs.
+        elif all(skipped and context != name for _, skipped, name in producers):
+            problems.append(f"Required check {context!r} comes from job {producers[0][0]}, which the fast tier "
+                            f"skips; a skipped job reports only its own name. Require {GATE_JOB} instead.")
     return problems
 
 
