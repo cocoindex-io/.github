@@ -1,0 +1,112 @@
+"""Tests for check_ci_conformance.py. Run: uv run --with pyyaml --with pytest pytest scripts"""
+
+import pathlib
+
+import yaml
+
+from check_ci_conformance import check_required_contexts, check_workflow
+
+TEMPLATE = pathlib.Path(__file__).parent.parent / "workflow-templates" / "ci.yml"
+
+
+def template() -> dict:
+    return yaml.safe_load(TEMPLATE.read_text())
+
+
+def messages(doc: dict) -> list[str]:
+    return [f.message for f in check_workflow("ci.yml", doc)]
+
+
+def test_template_conforms() -> None:
+    assert messages(template()) == []
+
+
+def test_gate_workflow_needs_merge_group() -> None:
+    doc = template()
+    del doc[True]["merge_group"]
+    assert any("merge_group" in m for m in messages(doc))
+
+
+def test_types_need_ready_for_review_and_stacked() -> None:
+    doc = template()
+    doc[True]["pull_request"]["types"] = ["opened", "synchronize"]
+    found = messages(doc)
+    assert any("ready_for_review" in m for m in found)
+    assert any("stacked" in m for m in found)
+
+
+def test_job_without_draft_guard() -> None:
+    doc = template()
+    doc["jobs"]["changes"]["if"] = "true"
+    assert any("Job changes must skip drafts" in m for m in messages(doc))
+
+
+def test_gate_must_run_always_and_need_every_job() -> None:
+    doc = template()
+    doc["jobs"]["ci-gate"]["if"] = "github.event.pull_request.draft != true"
+    doc["jobs"]["ci-gate"]["needs"] = ["changes"]
+    found = messages(doc)
+    assert any("always()" in m for m in found)
+    assert any("misses: test" in m for m in found)
+
+
+def test_concurrency_required() -> None:
+    doc = template()
+    del doc["concurrency"]
+    assert any("concurrency" in m for m in messages(doc))
+
+
+def test_ci_mode_and_checks_permission() -> None:
+    doc = template()
+    doc["jobs"]["changes"]["permissions"] = {"contents": "read"}
+    assert any("checks: read" in m for m in messages(doc))
+    doc["jobs"]["changes"]["steps"] = [s for s in doc["jobs"]["changes"]["steps"] if "ci-mode" not in str(s.get("uses"))]
+    assert any("to pick the tier" in m for m in messages(doc))
+
+
+def test_plain_pull_request_workflow() -> None:
+    doc = yaml.safe_load("""
+on:
+  pull_request:
+    paths: [docs/**]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps: [{run: make}]
+""")
+    found = messages(doc)
+    assert any("ready_for_review" in m for m in found)
+    assert any("concurrency" in m for m in found)
+    assert any("Job build must skip drafts" in m for m in found)
+    assert not any("stacked" in m or "merge_group" in m for m in found)
+
+
+def test_branch_filtered_workflow_needs_stacked() -> None:
+    doc = yaml.safe_load("""
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+concurrency:
+  group: x-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  fast-check:
+    if: github.event.pull_request.draft != true
+    runs-on: ubuntu-latest
+""")
+    assert [m for m in messages(doc) if "stacked" in m]
+
+
+def test_required_contexts_match_job_names_and_matrix_prefixes() -> None:
+    doc = yaml.safe_load("""
+on: [merge_group]
+jobs:
+  ci-gate: {runs-on: x}
+  pre-commit: {runs-on: x}
+  rust:
+    name: rust-checks (${{ matrix.os }})
+    runs-on: x
+""")
+    contexts = ["ci-gate", "pre-commit (3.11)", "rust-checks (ubuntu-latest)", "fast-check"]
+    assert check_required_contexts(contexts, [doc]) == ["fast-check"]

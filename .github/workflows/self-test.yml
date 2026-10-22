@@ -1,0 +1,33 @@
+name: Self-test
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number && format('pr-{0}', github.event.pull_request.number) || github.run_id }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  self-test:
+    if: github.event.pull_request.draft != true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
+      - name: Unit tests
+        run: uv run --no-project --with pyyaml==6.0.3 --with pytest==9.1.1 pytest -q scripts
+      - name: The starter workflow conforms
+        run: uv run --no-project --with pyyaml==6.0.3 scripts/check_ci_conformance.py . --workflows workflow-templates
+      # actionlint 1.7.12 predates stacked pull requests and rejects the
+      # `stacked` activity type.
+      - name: actionlint
+        run: >-
+          uvx --from actionlint-py==1.7.12.25 actionlint
+          -ignore 'invalid activity type "stacked"'
+          workflow-templates/ci.yml .github/workflows/*.yml

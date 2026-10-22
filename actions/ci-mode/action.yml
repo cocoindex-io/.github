@@ -1,0 +1,57 @@
+name: CI mode
+description: >-
+  Decides whether this run executes the full CI tier or only the fast one.
+  See CI.md in cocoindex-io/.github for the tiers. The calling job needs
+  `checks: read` and `contents: read`.
+outputs:
+  full:
+    description: "'true' when this run executes the full tier, 'false' for the fast tier."
+    value: ${{ steps.mode.outputs.full }}
+runs:
+  using: composite
+  steps:
+    - id: mode
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        EVENT: ${{ github.event_name }}
+        REPO: ${{ github.repository }}
+        SHA: ${{ github.sha }}
+        # A stacked pull request is checked against the stack's base, not
+        # against the branch of the layer below it.
+        BASE: ${{ github.event.pull_request.stack.base.ref || github.event.pull_request.base.ref }}
+        STACK_POSITION: ${{ github.event.pull_request.stack.position }}
+        STACK_SIZE: ${{ github.event.pull_request.stack.size }}
+      run: |
+        full=true
+        reason="a $EVENT run executes the full tier"
+        if [ "$EVENT" = pull_request ]; then
+          # Every lookup that fails falls back to the full tier: it costs
+          # runner time but never lets a change skip its tests.
+          if ! queue=$(gh api "repos/$REPO/rules/branches/$BASE" --jq 'any(.[]; .type == "merge_queue")'); then
+            echo "::warning::Could not read the rules of $BASE, so this run executes the full tier."
+            queue=unknown
+          fi
+          if [ "$queue" = true ]; then
+            full=false
+            reason="$BASE has a merge queue, which runs the full tier on the commit that lands"
+          elif [ -n "$STACK_SIZE" ] && [ "$STACK_POSITION" != "$STACK_SIZE" ]; then
+            full=false
+            reason="layer $STACK_POSITION of $STACK_SIZE in a stack; the top layer's run covers the whole stack"
+          fi
+        elif [ "$EVENT" = push ]; then
+          # A merge queue pushes the exact commit its merge-group run tested.
+          if passed=$(gh api "repos/$REPO/commits/$SHA/check-runs?check_name=ci-gate&status=completed" \
+                --jq '[.check_runs[] | select(.conclusion == "success")] | length'); then
+            if [ "$passed" -gt 0 ]; then
+              full=false
+              reason="$SHA already passed ci-gate in an earlier run, such as its merge-group run"
+            fi
+          else
+            echo "::warning::Could not read the checks of $SHA, so this run executes the full tier."
+          fi
+        fi
+        echo "full=$full" >> "$GITHUB_OUTPUT"
+        tier=fast
+        [ "$full" = true ] && tier=full
+        echo "CI tier: $tier ($reason)" | tee -a "$GITHUB_STEP_SUMMARY"

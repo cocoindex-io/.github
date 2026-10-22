@@ -1,0 +1,44 @@
+{
+  "name": "ci-merge-queue",
+  "target": "branch",
+  "enforcement": "active",
+  "bypass_actors": [
+    {"actor_id": 5, "actor_type": "RepositoryRole", "bypass_mode": "pull_request"}
+  ],
+  "conditions": {
+    "ref_name": {"include": ["~DEFAULT_BRANCH"], "exclude": []},
+    "repository_property": {
+      "include": [{"name": "ci-tier", "property_values": ["merge-queue"], "source": "custom"}],
+      "exclude": []
+    }
+  },
+  "rules": [
+    {
+      "type": "merge_queue",
+      "parameters": {
+        "merge_method": "SQUASH",
+        "grouping_strategy": "ALLGREEN",
+        "max_entries_to_build": 4,
+        "max_entries_to_merge": 4,
+        "min_entries_to_merge": 1,
+        "min_entries_to_merge_wait_minutes": 5,
+        "check_response_timeout_minutes": 90
+      }
+    },
+    {
+      "type": "required_status_checks",
+      "parameters": {
+        "strict_required_status_checks_policy": false,
+        "required_status_checks": [{"context": "ci-gate", "integration_id": 15368}]
+      }
+    },
+    {
+      "type": "workflows",
+      "parameters": {
+        "workflows": [
+          {"path": ".github/workflows/ci-conformance.yml", "repository_id": 941333632, "ref": "refs/tags/v1"}
+        ]
+      }
+    }
+  ]
+}

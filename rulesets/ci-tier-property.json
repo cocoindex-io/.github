@@ -1,0 +1,8 @@
+{
+  "property_name": "ci-tier",
+  "value_type": "single_select",
+  "required": false,
+  "allowed_values": ["merge-queue"],
+  "description": "merge-queue: the default branch lands through a merge queue and the CI shape in cocoindex-io/.github CI.md is required. Repository admins set it.",
+  "values_editable_by": "org_and_repo_actors"
+}
