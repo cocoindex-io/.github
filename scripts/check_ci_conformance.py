@@ -25,6 +25,9 @@ import yaml
 CI_MODE_ACTION = "cocoindex-io/.github/actions/ci-mode@"
 GATE_JOB = "ci-gate"
 GITHUB_ACTIONS_APP_ID = 15368
+# Status functions in a job's `if` replace the implicit success() check, so
+# the job runs even when a job it needs was skipped.
+STATUS_FUNCTIONS = ("always()", "cancelled()", "failure()")
 
 
 class Finding(NamedTuple):
@@ -71,14 +74,19 @@ def check_workflow(path: str, doc: dict[Any, Any]) -> list[Finding]:
         if (has_gate or branch_filtered) and "stacked" not in types:
             fail("pull_request.types must list stacked: a stack layer whose opened event arrives before its "
                  "stack exists misses the branch filter and runs no CI.")
-        group = _text((doc.get("concurrency") or {}).get("group"))
-        cancel = (doc.get("concurrency") or {}).get("cancel-in-progress")
+        concurrency = doc.get("concurrency") or {}
+        if isinstance(concurrency, str):  # `concurrency: <group>` is the short form
+            concurrency = {"group": concurrency}
+        group = _text(concurrency.get("group"))
+        cancel = concurrency.get("cancel-in-progress")
         if "pull_request.number" not in group or cancel in (None, False):
             fail("A workflow-level concurrency group keyed on github.event.pull_request.number, "
                  "with cancel-in-progress, must cancel a pull request's superseded runs.")
         for job_id, job in jobs.items():
             condition = _text(job.get("if"))
-            inherits_skip = bool(job.get("needs")) and "always()" not in condition
+            # A job that needs a skipped job is skipped too, unless a status
+            # function in its `if` overrides the implicit success() check.
+            inherits_skip = bool(job.get("needs")) and not any(f in condition for f in STATUS_FUNCTIONS)
             if "pull_request.draft" not in condition and not inherits_skip:
                 fail(f"Job {job_id} must skip drafts: add `github.event.pull_request.draft != true` to its if.")
 
@@ -108,19 +116,56 @@ def check_workflow(path: str, doc: dict[Any, Any]) -> list[Finding]:
     return findings
 
 
-def check_name_prefixes(doc: dict[Any, Any]) -> list[str]:
-    """Return the check-name prefixes the workflow's jobs report under."""
-    prefixes = []
-    for job_id, job in (doc.get("jobs") or {}).items():
-        name = _text(job.get("name")) or job_id
-        prefixes.append(name.split("${{")[0].strip())
-    return prefixes
+def _needs(job: dict[str, Any]) -> list[str]:
+    needs = job.get("needs") or []
+    return [needs] if isinstance(needs, str) else list(needs)
 
 
-def check_required_contexts(contexts: list[str], merge_group_docs: list[dict[Any, Any]]) -> list[str]:
-    """Return the required contexts that no merge_group workflow reports."""
-    prefixes = [p for doc in merge_group_docs for p in check_name_prefixes(doc)]
-    return [c for c in contexts if not any(p and c.startswith(p) for p in prefixes)]
+def _tier_skipped_jobs(jobs: dict[str, Any]) -> set[str]:
+    """Jobs a fast-tier run skips: those whose `if` reads the tier, and those that need one."""
+    skipped = {job_id for job_id, job in jobs.items() if "outputs.full" in _text(job.get("if"))}
+    grew = True
+    while grew:
+        grew = False
+        for job_id, job in jobs.items():
+            if (job_id not in skipped and any(n in skipped for n in _needs(job))
+                    and not any(f in _text(job.get("if")) for f in STATUS_FUNCTIONS)):
+                skipped.add(job_id)
+                grew = True
+    return skipped
+
+
+def _reports(job_id: str, job: dict[str, Any], context: str) -> bool:
+    """Whether the job reports `context`: as its name, a matrix leg `name (…)`, or a reusable workflow's `name / …`."""
+    name = _text(job.get("name")) or job_id
+    if "${{" in name:
+        return context.startswith(name.split("${{")[0])
+    return context == name or context.startswith((f"{name} (", f"{name} / "))
+
+
+def required_check_problems(contexts: list[str], merge_group_docs: list[dict[Any, Any]]) -> list[str]:
+    """Explain each required context that would leave a pull request or merge group waiting."""
+    problems = []
+    for context in contexts:
+        producers = []  # (job id, skipped by the fast tier, the name it reports when skipped)
+        for doc in merge_group_docs:
+            jobs: dict[str, Any] = doc.get("jobs") or {}
+            skipped = _tier_skipped_jobs(jobs)
+            producers += [
+                (job_id, job_id in skipped, _text(job.get("name")) or job_id)
+                for job_id, job in jobs.items()
+                if _reports(job_id, job, context)
+            ]
+        if not producers:
+            problems.append(f"Required check {context!r} comes from no workflow that triggers on merge_group, "
+                            "so the merge queue would wait for it forever.")
+        # A skipped job reports one check under its own name: a skipped matrix
+        # job doesn't expand into its legs, and a skipped reusable-workflow
+        # call reports none of the called workflow's jobs.
+        elif all(skipped and context != name for _, skipped, name in producers):
+            problems.append(f"Required check {context!r} comes from job {producers[0][0]}, which the fast tier "
+                            f"skips; a skipped job reports only its own name. Require {GATE_JOB} instead.")
+    return problems
 
 
 def required_contexts(repo: str) -> list[str] | None:
@@ -170,9 +215,8 @@ def main() -> int:
         findings.append(Finding(str(directory), f"Exactly one workflow must define {GATE_JOB}; found {len(gate_files)}."))
     if args.repo:
         contexts = required_contexts(args.repo)
-        for context in check_required_contexts(contexts or [], merge_group_docs):
-            findings.append(Finding(str(directory), f"Required check {context!r} comes from no workflow that "
-                                    "triggers on merge_group, so the merge queue would wait for it forever."))
+        for problem in required_check_problems(contexts or [], merge_group_docs):
+            findings.append(Finding(str(directory), problem))
 
     annotate = os.environ.get("GITHUB_ACTIONS") == "true"
     for finding in findings:

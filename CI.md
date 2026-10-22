@@ -49,7 +49,11 @@ workflow has all of them.
    in its `if`, or needs a job that has it.
 4. **A `changes` job** runs `cocoindex-io/.github/actions/ci-mode@v1` (it
    needs `checks: read`) and the path filter. Expensive jobs run when
-   `full == 'true'` and the filter output is not `'false'`.
+   `full == 'true'` and the filter output is not `'false'`. The filter is
+   skipped for a stack layer, and so is any other diff against the pull
+   request's base branch: a stack layer's base is the layer below it, but
+   the top layer's run stands in for the whole stack. Diff a stack layer
+   against `github.event.pull_request.stack.base.ref`.
 5. **A `ci-gate` job** with `if: always()` that needs every other job. It is
    the one check to require. A skipped job reports success, so a required
    check that can be skipped by a failure would let the failure merge.
@@ -57,7 +61,10 @@ workflow has all of them.
 Every other workflow that runs on pull requests has parts 2 and 3, the
 `ready_for_review` type, and the `stacked` type when it filters on branches.
 Every workflow that reports a required check triggers on `merge_group`, or
-the queue waits for that check until it times out.
+the queue waits for that check until it times out. Require `ci-gate`, plus
+checks from jobs that run in every tier, such as `fast-check`. A matrix job
+that the tier skips reports one check under its unexpanded name, so a
+required `name (value)` check from it never arrives.
 
 ## The merge queue
 
@@ -121,6 +128,10 @@ repository's own rulesets.
   the Change Management Policy asks that the change be announced.
 - Check a repository locally:
   `uv run --with pyyaml scripts/check_ci_conformance.py PATH --repo OWNER/NAME`.
+- A ruleset runs a required workflow only on `opened`, `synchronize` and
+  `reopened` pull request events and on merge groups, and ignores the
+  workflow's `types` and filters. `ci-conformance` therefore runs on drafts
+  too.
 
 ## Changing this kit
 
