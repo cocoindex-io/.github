@@ -14,7 +14,7 @@ The pieces in this repository:
 | [`actions/ci-mode`](actions/ci-mode/action.yml) | Decides the tier of a run (below). |
 | [`scripts/check_ci_conformance.py`](scripts/check_ci_conformance.py) | Checks a repository's workflows against this page. |
 | [`.github/workflows/ci-conformance.yml`](.github/workflows/ci-conformance.yml) | Runs that check; the organization ruleset requires it. |
-| [`rulesets/`](rulesets/) and [`scripts/apply_rulesets.py`](scripts/apply_rulesets.py) | The organization ruleset and custom property, and the script that applies or checks them. |
+| [`rulesets/`](rulesets/) and [`scripts/apply_rulesets.py`](scripts/apply_rulesets.py) | The custom property, the organization ruleset, the merge-queue repository ruleset, and the script that applies or checks them. |
 
 ## Tiers
 
@@ -68,7 +68,7 @@ required `name (value)` check from it never arrives.
 
 ## The merge queue
 
-The `ci-merge-queue` ruleset configures it: squash merges, every entry must
+The `merge-queue` repository ruleset configures it: squash merges, every entry must
 pass (`ALLGREEN`), and at most 4 builds at once. That build limit is the CI
 quota: a queued pull request waits for a free build slot.
 
@@ -107,7 +107,26 @@ The queue squashes. A pull request that must land as a merge commit, such as
 an upstream merge, bypasses the queue: repository admins may merge pull
 requests directly. Run the full tier on its branch first with
 `gh workflow run`, wait for it to pass, then merge with
-`gh pr merge --merge --admin`. Nothing else bypasses the queue.
+`gh pr merge --merge --admin`. Apart from an incident (below), nothing else
+bypasses the queue.
+
+## Urgent changes
+
+An urgent fix jumps the queue: it goes to the front, is built next on top of
+the default branch, and still lands tested. Builds already in progress
+restart, because their base changed. Repository admins can jump the queue;
+a custom repository role can grant it to others. The web UI offers it when
+adding a pull request to the queue, and so does the API:
+
+```bash
+gh api graphql -F id="$(gh pr view <number> --json id --jq .id)" \
+  -f query='mutation($id:ID!){enqueuePullRequest(input:{pullRequestId:$id, jump:true}){mergeQueueEntry{position}}}'
+```
+
+Bypassing the queue (`gh pr merge --squash --admin`) lands a change without
+its full CI run. It is only for an incident in which CI itself is broken.
+The Change Management Policy requires green CI even for a hotfix, so such a
+bypass is a deviation and goes in the incident log.
 
 ## Caches
 
@@ -118,12 +137,21 @@ runs and the nightly run, and every run can read those.
 ## Enforcement
 
 A repository opts in by setting its `ci-tier` custom property to
-`merge-queue`. The `ci-merge-queue` organization ruleset then applies to its
-default branch: the merge queue, the `ci-gate` check, and the `ci-conformance`
-workflow from this repository. Other required checks stay in the
-repository's own rulesets.
+`merge-queue`, after which an organization owner runs
+`scripts/apply_rulesets.py`. Two rulesets then apply to its default branch:
 
-- Apply or check the ruleset and property: `scripts/apply_rulesets.py
+- the `ci-merge-queue` organization ruleset, which requires the `ci-gate`
+  check and the `ci-conformance` workflow from this repository;
+- the `merge-queue` repository ruleset, which the script adds to the
+  repository and which turns the queue on. GitHub's organization rulesets
+  don't accept a merge-queue rule.
+
+Other required checks stay in the repository's own rulesets. Both rulesets
+let repository admins merge pull requests directly, for merge commits and
+incidents. To leave the queue, unset the property and delete the
+repository's `merge-queue` ruleset.
+
+- Apply or check the property and rulesets: `scripts/apply_rulesets.py
   [--check]`. It needs an organization owner with the `admin:org` scope, and
   the Change Management Policy asks that the change be announced.
 - Check a repository locally:
@@ -160,3 +188,5 @@ Checked on 2026-10-22 in a temporary private repository:
 - The commit the queue pushes to `main` is the commit its merge group tested.
 - A repository admin merged a pull request around the queue as a merge
   commit with both parents.
+- GitHub's organization rulesets reject a `merge_queue` rule; repository
+  rulesets accept it.

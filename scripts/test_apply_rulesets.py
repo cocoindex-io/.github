@@ -17,3 +17,16 @@ def test_rules_compare_by_type_and_report_changes() -> None:
 
 def test_missing_rule() -> None:
     assert differences({"rules": [{"type": "a"}]}, {"rules": [{"type": "b"}]})
+
+
+def test_opted_in_selects_the_opt_in_value() -> None:
+    from apply_rulesets import opted_in
+
+    values = [
+        {"repository_name": "b", "properties": [{"property_name": "ci-tier", "value": "merge-queue"}]},
+        {"repository_name": "a", "properties": [{"property_name": "ci-tier", "value": "merge-queue"},
+                                                {"property_name": "product", "value": "true"}]},
+        {"repository_name": "c", "properties": [{"property_name": "ci-tier", "value": None}]},
+        {"repository_name": "d", "properties": [{"property_name": "product", "value": "merge-queue"}]},
+    ]
+    assert opted_in(values, "ci-tier") == ["a", "b"]
