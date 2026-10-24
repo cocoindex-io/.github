@@ -48,7 +48,8 @@ workflow has all of them.
 3. **Drafts skip.** Every job has `github.event.pull_request.draft != true`
    in its `if`, or needs a job that has it.
 4. **A `changes` job** runs `cocoindex-io/.github/actions/ci-mode@v1` (it
-   needs `checks: read`) and the path filter. Expensive jobs run when
+   needs `checks: read`, and `pull-requests: read` in a repository with a
+   merge queue) and the path filter. Expensive jobs run when
    `full == 'true'` and the filter output is not `'false'`. The filter is
    skipped for a stack layer, and so is any other diff against the pull
    request's base branch: a stack layer's base is the layer below it, but
@@ -109,6 +110,13 @@ requests directly. Run the full tier on its branch first with
 `gh workflow run`, wait for it to pass, then merge with
 `gh pr merge --merge --admin`. Apart from an incident (below), nothing else
 bypasses the queue.
+
+Label such a pull request `merge-commit` when you open it. `ci-mode` fails
+the merge group of a pull request with that label before any test runs, so
+the queue removes it instead of squashing it. When `ci-mode` can't read the
+labels, the merge group fails too: queueing a pull request again costs one
+build, and a squashed merge commit costs a repair merge. The label has to be
+on the pull request before it enters the queue.
 
 ## Urgent changes
 

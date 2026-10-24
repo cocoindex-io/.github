@@ -1,8 +1,10 @@
 name: CI mode
 description: >-
-  Decides whether this run executes the full CI tier or only the fast one.
+  Decides whether this run executes the full CI tier or only the fast one,
+  and fails a merge group whose pull request must land as a merge commit.
   See CI.md in cocoindex-io/.github for the tiers. The calling job needs
-  `checks: read` and `contents: read`.
+  `checks: read` and `contents: read`, and in a repository with a merge
+  queue also `pull-requests: read`.
 outputs:
   full:
     description: "'true' when this run executes the full tier, 'false' for the fast tier."
@@ -22,6 +24,7 @@ runs:
         BASE: ${{ github.event.pull_request.stack.base.ref || github.event.pull_request.base.ref }}
         STACK_POSITION: ${{ github.event.pull_request.stack.position }}
         STACK_SIZE: ${{ github.event.pull_request.stack.size }}
+        HEAD_REF: ${{ github.event.merge_group.head_ref }}
       run: |
         full=true
         reason="a $EVENT run executes the full tier"
@@ -49,6 +52,27 @@ runs:
             fi
           else
             echo "::warning::Could not read the checks of $SHA, so this run executes the full tier."
+          fi
+        elif [ "$EVENT" = merge_group ]; then
+          # The queue squashes. A pull request labelled merge-commit, such as
+          # an upstream merge, must keep its merge commit, so its merge group
+          # fails here, before any expensive job starts, and the queue removes
+          # it. A failed lookup fails too: queueing a pull request again costs
+          # one build, and a squashed merge commit costs a repair. The queue's
+          # branch names the pull request: gh-readonly-queue/<base>/pr-<n>-<sha>.
+          pr=${HEAD_REF##*/pr-}
+          pr=${pr%%-*}
+          if ! [[ $pr =~ ^[0-9]+$ ]]; then
+            echo "::error::Could not find the pull request number in the merge group ref $HEAD_REF."
+            exit 1
+          fi
+          if ! labelled=$(gh api "repos/$REPO/pulls/$pr" --jq 'any(.labels[]; .name == "merge-commit")'); then
+            echo "::error::Could not read the labels of #$pr, so its merge group fails. Queue it again; if this repeats, check that the job that runs ci-mode has \`pull-requests: read\`."
+            exit 1
+          fi
+          if [ "$labelled" = true ]; then
+            echo "::error::#$pr is labelled merge-commit, so it must land as a merge commit, and the queue squashes. Merge it around the queue after a full run on its branch passes: gh pr merge $pr --merge --admin (CI.md, Merge commits)."
+            exit 1
           fi
         fi
         echo "full=$full" >> "$GITHUB_OUTPUT"
