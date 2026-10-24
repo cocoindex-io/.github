@@ -1,7 +1,7 @@
 {
   "allow_merge_commit": true,
-  "allow_squash_merge": false,
+  "allow_squash_merge": true,
   "allow_rebase_merge": false,
-  "merge_commit_title": "PR_TITLE",
-  "merge_commit_message": "PR_BODY"
+  "merge_commit_title": "MERGE_MESSAGE",
+  "merge_commit_message": "PR_TITLE"
 }

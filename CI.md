@@ -68,7 +68,7 @@ required `name (value)` check from it never arrives.
 
 ## The merge queue
 
-The `merge-queue` repository ruleset configures it: merge commits, every
+The `merge-queue` repository ruleset configures it: squash merges, every
 entry must pass (`ALLGREEN`), and at most 4 builds at once. That build limit
 is the CI quota: a queued pull request waits for a free build slot.
 
@@ -103,16 +103,12 @@ requests go to the queue on their own, which tests them together anyway.
 
 ## Merge commits
 
-The queue lands every pull request as a merge commit, and a repository with a
-queue allows no other merge method. A pull request keeps its own history, so
-an upstream merge keeps its upstream parent and goes through the queue like
-any other change. No merge method can squash it, and nothing bypasses the
-queue for it.
-
-The default branch's first-parent history has one commit per pull request,
-titled with the pull request's title and number. Read it with
-`git log --first-parent`, bisect with `git bisect start --first-parent`, and
-revert a pull request with `git revert -m 1 <merge-commit>`.
+The queue squashes. A pull request that must land as a merge commit, such as
+an upstream merge, bypasses the queue: repository admins may merge pull
+requests directly. Run the full tier on its branch first with
+`gh workflow run`, wait for it to pass, then merge with
+`gh pr merge --merge --admin`. Apart from an incident (below), nothing else
+bypasses the queue.
 
 ## Urgent changes
 
@@ -127,7 +123,7 @@ gh api graphql -F id="$(gh pr view <number> --json id --jq .id)" \
   -f query='mutation($id:ID!){enqueuePullRequest(input:{pullRequestId:$id, jump:true}){mergeQueueEntry{position}}}'
 ```
 
-Bypassing the queue (`gh pr merge --merge --admin`) lands a change without
+Bypassing the queue (`gh pr merge --squash --admin`) lands a change without
 its full CI run. It is only for an incident in which CI itself is broken.
 The Change Management Policy requires green CI even for a hotfix, so such a
 bypass is a deviation and goes in the incident log.
@@ -151,12 +147,12 @@ A repository opts in by setting its `ci-tier` custom property to
   don't accept a merge-queue rule.
 
 The script also sets the repository's merge settings from
-`rulesets/repo-settings.json`: merge commits only, titled with the pull
-request's title. Other required checks stay in the repository's own
-rulesets. Both rulesets let repository admins merge pull requests directly,
-for incidents. To leave the queue, unset the property, delete the
-repository's `merge-queue` ruleset, and set its merge settings as it wants
-them.
+`rulesets/repo-settings.json`: squash merges for the queue, merge commits for
+the admin merge above, and no rebase merges. Other required checks stay in
+the repository's own rulesets. Both rulesets let repository admins merge
+pull requests directly, for merge commits and incidents. To leave the
+queue, unset the property, delete the repository's `merge-queue` ruleset,
+and set its merge settings as it wants them.
 
 - Apply or check the property, rulesets and merge settings:
   `scripts/apply_rulesets.py [--check]`. It needs an organization owner with
@@ -199,19 +195,8 @@ Checked on 2026-10-22 in a temporary private repository:
 - GitHub's organization rulesets reject a `merge_queue` rule; repository
   rulesets accept it.
 
-Checked on 2026-10-24 in cocoindex-plus, after its queue moved to merge
-commits:
+Checked on 2026-10-24 in cocoindex-plus:
 
-- An upstream merge (cocoindex-plus#565) went through the queue and landed
-  as the merge commit its merge group tested. Its second parent is the pull
-  request's head, the upstream merge itself, so the upstream commit stayed
-  an ancestor of `main`.
-- The queue's merge commit takes the repository's merge settings: the pull
-  request's title and number as its subject, the pull request's body as its
-  message.
-- With squash and rebase merges disallowed, `gh pr merge --squash --admin`
-  and `--rebase --admin` fail: "Squash merges are not allowed on this
-  repository."
 - The queue marks a failed entry unmergeable at once, but removes it only
   when it reaches the front. Until then, the entries behind it are built on
   top of it.

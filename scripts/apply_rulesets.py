@@ -9,8 +9,9 @@
 - rulesets/repo/*.json: repository rulesets, put on every repository whose
   `ci-tier` is `merge-queue`. GitHub doesn't accept a merge-queue rule in an
   organization ruleset, so the queue lives here.
-- rulesets/repo-settings.json: the merge settings of those repositories. They
-  allow only the merge method the queue uses.
+- rulesets/repo-settings.json: the merge settings of those repositories:
+  squash for the queue, merge commits for a pull request that must keep its
+  merge commit, no rebase.
 
 Needs the `gh` CLI signed in as an organization owner with the admin:org scope
 (`gh auth refresh -h github.com -s admin:org`). Org-setting changes follow the
