@@ -110,6 +110,17 @@ requests directly. Run the full tier on its branch first with
 `gh pr merge --merge --admin`. Apart from an incident (below), nothing else
 bypasses the queue.
 
+`ci-mode` keeps such a pull request out of the queue, so nobody has to
+remember it. A pull request must land as a merge commit when it contains a
+merge whose first parent is on the base and whose second parent is not: the
+merge brings in a line of history that a squash would drop. `ci-mode` fails
+the merge group of such a pull request before any test job starts, and the
+queue removes it. Merging the base into a branch, or two copies of a branch
+into each other, is not such a merge. A pull request stacked on a merge pull
+request that has not landed yet is refused too, until the merge lands. When
+the check can't run, the merge group fails: queueing again costs one build,
+and a squashed merge costs a repair merge.
+
 ## Urgent changes
 
 An urgent fix jumps the queue: it goes to the front, is built next on top of
