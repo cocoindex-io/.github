@@ -48,8 +48,7 @@ workflow has all of them.
 3. **Drafts skip.** Every job has `github.event.pull_request.draft != true`
    in its `if`, or needs a job that has it.
 4. **A `changes` job** runs `cocoindex-io/.github/actions/ci-mode@v1` (it
-   needs `checks: read`, and `pull-requests: read` in a repository with a
-   merge queue) and the path filter. Expensive jobs run when
+   needs `checks: read`) and the path filter. Expensive jobs run when
    `full == 'true'` and the filter output is not `'false'`. The filter is
    skipped for a stack layer, and so is any other diff against the pull
    request's base branch: a stack layer's base is the layer below it, but
@@ -69,9 +68,9 @@ required `name (value)` check from it never arrives.
 
 ## The merge queue
 
-The `merge-queue` repository ruleset configures it: squash merges, every entry must
-pass (`ALLGREEN`), and at most 4 builds at once. That build limit is the CI
-quota: a queued pull request waits for a free build slot.
+The `merge-queue` repository ruleset configures it: merge commits, every
+entry must pass (`ALLGREEN`), and at most 4 builds at once. That build limit
+is the CI quota: a queued pull request waits for a free build slot.
 
 **How it builds.** Each queued pull request gets its own build of the base
 branch plus every pull request ahead of it. Builds run in parallel up to the
@@ -104,19 +103,16 @@ requests go to the queue on their own, which tests them together anyway.
 
 ## Merge commits
 
-The queue squashes. A pull request that must land as a merge commit, such as
-an upstream merge, bypasses the queue: repository admins may merge pull
-requests directly. Run the full tier on its branch first with
-`gh workflow run`, wait for it to pass, then merge with
-`gh pr merge --merge --admin`. Apart from an incident (below), nothing else
-bypasses the queue.
+The queue lands every pull request as a merge commit, and a repository with a
+queue allows no other merge method. A pull request keeps its own history, so
+an upstream merge keeps its upstream parent and goes through the queue like
+any other change. No merge method can squash it, and nothing bypasses the
+queue for it.
 
-Label such a pull request `merge-commit` when you open it. `ci-mode` fails
-the merge group of a pull request with that label before any test runs, so
-the queue removes it instead of squashing it. When `ci-mode` can't read the
-labels, the merge group fails too: queueing a pull request again costs one
-build, and a squashed merge commit costs a repair merge. The label has to be
-on the pull request before it enters the queue.
+The default branch's first-parent history has one commit per pull request,
+titled with the pull request's title and number. Read it with
+`git log --first-parent`, bisect with `git bisect start --first-parent`, and
+revert a pull request with `git revert -m 1 <merge-commit>`.
 
 ## Urgent changes
 
@@ -131,7 +127,7 @@ gh api graphql -F id="$(gh pr view <number> --json id --jq .id)" \
   -f query='mutation($id:ID!){enqueuePullRequest(input:{pullRequestId:$id, jump:true}){mergeQueueEntry{position}}}'
 ```
 
-Bypassing the queue (`gh pr merge --squash --admin`) lands a change without
+Bypassing the queue (`gh pr merge --merge --admin`) lands a change without
 its full CI run. It is only for an incident in which CI itself is broken.
 The Change Management Policy requires green CI even for a hotfix, so such a
 bypass is a deviation and goes in the incident log.
@@ -154,14 +150,18 @@ A repository opts in by setting its `ci-tier` custom property to
   repository and which turns the queue on. GitHub's organization rulesets
   don't accept a merge-queue rule.
 
-Other required checks stay in the repository's own rulesets. Both rulesets
-let repository admins merge pull requests directly, for merge commits and
-incidents. To leave the queue, unset the property and delete the
-repository's `merge-queue` ruleset.
+The script also sets the repository's merge settings from
+`rulesets/repo-settings.json`: merge commits only, titled with the pull
+request's title. Other required checks stay in the repository's own
+rulesets. Both rulesets let repository admins merge pull requests directly,
+for incidents. To leave the queue, unset the property, delete the
+repository's `merge-queue` ruleset, and set its merge settings as it wants
+them.
 
-- Apply or check the property and rulesets: `scripts/apply_rulesets.py
-  [--check]`. It needs an organization owner with the `admin:org` scope, and
-  the Change Management Policy asks that the change be announced.
+- Apply or check the property, rulesets and merge settings:
+  `scripts/apply_rulesets.py [--check]`. It needs an organization owner with
+  the `admin:org` scope, and the Change Management Policy asks that the
+  change be announced.
 - Check a repository locally:
   `uv run --with pyyaml scripts/check_ci_conformance.py PATH --repo OWNER/NAME`.
 - A ruleset runs a required workflow only on `opened`, `synchronize` and
@@ -198,3 +198,20 @@ Checked on 2026-10-22 in a temporary private repository:
   commit with both parents.
 - GitHub's organization rulesets reject a `merge_queue` rule; repository
   rulesets accept it.
+
+Checked on 2026-10-24 in cocoindex-plus, after its queue moved to merge
+commits:
+
+- An upstream merge (cocoindex-plus#565) went through the queue and landed
+  as the merge commit its merge group tested. Its second parent is the pull
+  request's head, the upstream merge itself, so the upstream commit stayed
+  an ancestor of `main`.
+- The queue's merge commit takes the repository's merge settings: the pull
+  request's title and number as its subject, the pull request's body as its
+  message.
+- With squash and rebase merges disallowed, `gh pr merge --squash --admin`
+  and `--rebase --admin` fail: "Squash merges are not allowed on this
+  repository."
+- The queue marks a failed entry unmergeable at once, but removes it only
+  when it reaches the front. Until then, the entries behind it are built on
+  top of it.

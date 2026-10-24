@@ -9,6 +9,8 @@
 - rulesets/repo/*.json: repository rulesets, put on every repository whose
   `ci-tier` is `merge-queue`. GitHub doesn't accept a merge-queue rule in an
   organization ruleset, so the queue lives here.
+- rulesets/repo-settings.json: the merge settings of those repositories. They
+  allow only the merge method the queue uses.
 
 Needs the `gh` CLI signed in as an organization owner with the admin:org scope
 (`gh auth refresh -h github.com -s admin:org`). Org-setting changes follow the
@@ -28,6 +30,7 @@ from typing import Any
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent / "rulesets"
 PROPERTY_FILE = ROOT / "ci-tier-property.json"
+SETTINGS_FILE = ROOT / "repo-settings.json"
 OPT_IN_VALUE = "merge-queue"
 
 
@@ -114,6 +117,21 @@ def sync_ruleset(scope: str, want: dict[str, Any], check: bool) -> bool:
     return True
 
 
+def sync_settings(repo: str, want: dict[str, Any], check: bool) -> bool:
+    """Make the settings of `repo` (repos/<owner>/<name>) that `want` names match it."""
+    label = f"{repo} settings"
+    found = differences(want, gh(repo))
+    if not found:
+        print(f"{label}: up to date")
+        return True
+    print(f"{label}: " + "; ".join(found))
+    if check:
+        return False
+    gh("-X", "PATCH", repo, payload=want)
+    print(f"{label}: applied")
+    return True
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--org", default="cocoindex-io")
@@ -126,9 +144,13 @@ def main() -> int:
         ok = sync_ruleset(f"orgs/{args.org}", json.loads(path.read_text()), args.check) and ok
     repos = opted_in(gh_list(f"orgs/{args.org}/properties/values"), prop["property_name"])
     print(f"repositories with {prop['property_name']}={OPT_IN_VALUE}: {', '.join(repos) or 'none'}")
+    settings = json.loads(SETTINGS_FILE.read_text())
     for repo in repos:
         for path in sorted((ROOT / "repo").glob("*.json")):
             ok = sync_ruleset(f"repos/{args.org}/{repo}", json.loads(path.read_text()), args.check) and ok
+        # After the rulesets: the queue's merge method has to stay allowed
+        # while the ruleset still names the old one.
+        ok = sync_settings(f"repos/{args.org}/{repo}", settings, args.check) and ok
     return 0 if ok else 1
 
 
