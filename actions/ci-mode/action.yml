@@ -67,7 +67,7 @@ runs:
             exit 1
           fi
           if ! labelled=$(gh api "repos/$REPO/pulls/$pr" --jq 'any(.labels[]; .name == "merge-commit")'); then
-            echo "::error::Could not read the labels of #$pr. The job that runs ci-mode needs \`pull-requests: read\` in a repository with a merge queue."
+            echo "::error::Could not read the labels of #$pr, so its merge group fails. Queue it again; if this repeats, check that the job that runs ci-mode has \`pull-requests: read\`."
             exit 1
           fi
           if [ "$labelled" = true ]; then

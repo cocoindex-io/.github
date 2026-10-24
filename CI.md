@@ -113,10 +113,10 @@ bypasses the queue.
 
 Label such a pull request `merge-commit` when you open it. `ci-mode` fails
 the merge group of a pull request with that label before any test runs, so
-the queue removes it instead of squashing it. A merge group whose label
-lookup fails fails too: queueing a pull request again costs one build, and a
-squashed merge commit costs a repair merge. The label has to be on the pull
-request before it enters the queue.
+the queue removes it instead of squashing it. When `ci-mode` can't read the
+labels, the merge group fails too: queueing a pull request again costs one
+build, and a squashed merge commit costs a repair merge. The label has to be
+on the pull request before it enters the queue.
 
 ## Urgent changes
 
