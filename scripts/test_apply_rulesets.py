@@ -4,8 +4,8 @@ from apply_rulesets import differences
 
 
 def test_subset_compare_ignores_extra_keys() -> None:
-    want = {"name": "x", "rules": [{"type": "merge_queue", "parameters": {"merge_method": "SQUASH"}}]}
-    have = {"name": "x", "id": 1, "rules": [{"type": "merge_queue", "parameters": {"merge_method": "SQUASH", "extra": 1}}]}
+    want = {"name": "x", "rules": [{"type": "merge_queue", "parameters": {"merge_method": "MERGE"}}]}
+    have = {"name": "x", "id": 1, "rules": [{"type": "merge_queue", "parameters": {"merge_method": "MERGE", "extra": 1}}]}
     assert differences(want, have) == []
 
 
