@@ -1,8 +1,9 @@
 name: CI mode
 description: >-
-  Decides whether this run executes the full CI tier or only the fast one.
-  See CI.md in cocoindex-io/.github for the tiers. The calling job needs
-  `checks: read` and `contents: read`.
+  Decides whether this run executes the full CI tier or only the fast one,
+  and fails the merge group of a pull request that must land as a merge
+  commit. See CI.md in cocoindex-io/.github for the tiers. The calling job
+  needs `checks: read` and `contents: read`.
 outputs:
   full:
     description: "'true' when this run executes the full tier, 'false' for the fast tier."
@@ -22,6 +23,9 @@ runs:
         BASE: ${{ github.event.pull_request.stack.base.ref || github.event.pull_request.base.ref }}
         STACK_POSITION: ${{ github.event.pull_request.stack.position }}
         STACK_SIZE: ${{ github.event.pull_request.stack.size }}
+        SERVER_URL: ${{ github.server_url }}
+        GROUP_REF: ${{ github.event.merge_group.head_ref }}
+        GROUP_BASE: ${{ github.event.merge_group.base_sha }}
       run: |
         full=true
         reason="a $EVENT run executes the full tier"
@@ -50,6 +54,44 @@ runs:
           else
             echo "::warning::Could not read the checks of $SHA, so this run executes the full tier."
           fi
+        elif [ "$EVENT" = merge_group ]; then
+          # The queue squashes, and a squash keeps only a merge's first
+          # parent. A pull request that merges another line of history onto
+          # its base, such as an upstream merge, must land as a merge commit
+          # (CI.md, Merge commits), so its merge group fails here, before any
+          # test job starts, and the queue removes it. When the check can't
+          # run, the merge group fails too: queueing again costs one build,
+          # and a squashed merge costs a repair merge.
+          pr=${GROUP_REF##*/pr-}
+          pr=${pr%%-*}
+          if ! [[ $pr =~ ^[0-9]+$ ]]; then
+            echo "::error::Could not find the pull request number in the merge group ref $GROUP_REF."
+            exit 1
+          fi
+          # Commits only: the check reads no trees or files.
+          history="$RUNNER_TEMP/ci-mode-history.git"
+          git init --quiet --bare "$history"
+          git --git-dir="$history" remote add origin "$SERVER_URL/$REPO"
+          auth="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')"
+          if ! git --git-dir="$history" -c http.extraheader="$auth" fetch --quiet --no-tags \
+                --filter=tree:0 origin "$GROUP_BASE" "+refs/pull/$pr/head:refs/pr"; then
+            echo "::error::Could not fetch the history of #$pr, so its merge group fails. Queue it again."
+            exit 1
+          fi
+          # A merge whose first parent is on the base and whose second is not
+          # brings in a line of history that only a merge commit keeps.
+          if ! merges=$(git --git-dir="$history" rev-list --merges --parents "$GROUP_BASE..refs/pr"); then
+            echo "::error::Could not list the merges of #$pr, so its merge group fails. Queue it again."
+            exit 1
+          fi
+          while read -r merge first second _; do
+            [ -n "$merge" ] || continue
+            if git --git-dir="$history" merge-base --is-ancestor "$first" "$GROUP_BASE" \
+                && ! git --git-dir="$history" merge-base --is-ancestor "$second" "$GROUP_BASE"; then
+              echo "::error::#$pr merges ${second:0:12} onto its base in ${merge:0:12}, and the queue's squash would drop that parent. Land #$pr as a merge commit around the queue, after a full run on its branch passes (CI.md, Merge commits)."
+              exit 1
+            fi
+          done <<<"$merges"
         fi
         echo "full=$full" >> "$GITHUB_OUTPUT"
         tier=fast

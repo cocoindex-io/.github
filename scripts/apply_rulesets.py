@@ -146,12 +146,16 @@ def main() -> int:
     repos = opted_in(gh_list(f"orgs/{args.org}/properties/values"), prop["property_name"])
     print(f"repositories with {prop['property_name']}={OPT_IN_VALUE}: {', '.join(repos) or 'none'}")
     settings = json.loads(SETTINGS_FILE.read_text())
+    # A merge-queue rule may only name a merge method the repository allows,
+    # so methods are enabled before the rulesets and disabled after them.
+    enabling = {key: value for key, value in settings.items() if key.startswith("allow_") and value is True}
     for repo in repos:
+        scope = f"repos/{args.org}/{repo}"
+        if not args.check:
+            ok = sync_settings(scope, enabling, check=False) and ok
         for path in sorted((ROOT / "repo").glob("*.json")):
-            ok = sync_ruleset(f"repos/{args.org}/{repo}", json.loads(path.read_text()), args.check) and ok
-        # After the rulesets: the queue's merge method has to stay allowed
-        # while the ruleset still names the old one.
-        ok = sync_settings(f"repos/{args.org}/{repo}", settings, args.check) and ok
+            ok = sync_ruleset(scope, json.loads(path.read_text()), args.check) and ok
+        ok = sync_settings(scope, settings, args.check) and ok
     return 0 if ok else 1
 
 
