@@ -157,9 +157,11 @@ A repository opts in by setting its `ci-tier` custom property to
   repository and which turns the queue on. GitHub's organization rulesets
   don't accept a merge-queue rule.
 
-The script also sets the repository's merge settings from
-`rulesets/repo-settings.json`: squash merges for the queue, merge commits for
-the admin merge above, and no rebase merges. Other required checks stay in
+The script also makes sure the repository allows squash merges, the queue's
+method (`rulesets/repo-settings.json`). A repository with other needs has its
+own file in `rulesets/repo-settings/`: cocoindex-plus allows merge commits,
+for the admin merge above, and no rebase merges. Settings no file names stay
+as the repository has them. Other required checks stay in
 the repository's own rulesets. Both rulesets let repository admins merge
 pull requests directly, for merge commits and incidents. To leave the
 queue, unset the property, delete the repository's `merge-queue` ruleset,
