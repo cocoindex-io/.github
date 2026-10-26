@@ -30,3 +30,14 @@ def test_opted_in_selects_the_opt_in_value() -> None:
         {"repository_name": "d", "properties": [{"property_name": "product", "value": "merge-queue"}]},
     ]
     assert opted_in(values, "ci-tier") == ["a", "b"]
+
+
+def test_repo_settings_layer_a_repository_file_over_the_common_ones() -> None:
+    from apply_rulesets import repo_settings
+
+    common = {"allow_squash_merge": True}
+    assert repo_settings(common, "no-such-repository") == {"allow_squash_merge": True}
+    plus = repo_settings(common, "cocoindex-plus")
+    assert plus["allow_squash_merge"] is True
+    assert plus["allow_merge_commit"] is True
+    assert plus["allow_rebase_merge"] is False

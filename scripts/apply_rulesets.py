@@ -9,9 +9,12 @@
 - rulesets/repo/*.json: repository rulesets, put on every repository whose
   `ci-tier` is `merge-queue`. GitHub doesn't accept a merge-queue rule in an
   organization ruleset, so the queue lives here.
-- rulesets/repo-settings.json: the merge settings of those repositories:
-  squash for the queue, merge commits for a pull request that must keep its
-  merge commit, no rebase.
+- rulesets/repo-settings.json: the merge settings every one of those
+  repositories needs: squash merges, the queue's method.
+- rulesets/repo-settings/<name>.json: a repository's own merge settings, on
+  top of those. cocoindex-plus allows merge commits, for the upstream merges
+  that land around the queue, and no rebase merges. Settings no file names
+  stay as the repository has them.
 
 Needs the `gh` CLI signed in as an organization owner with the admin:org scope
 (`gh auth refresh -h github.com -s admin:org`). Org-setting changes follow the
@@ -32,6 +35,7 @@ from typing import Any
 ROOT = pathlib.Path(__file__).resolve().parent.parent / "rulesets"
 PROPERTY_FILE = ROOT / "ci-tier-property.json"
 SETTINGS_FILE = ROOT / "repo-settings.json"
+SETTINGS_DIR = ROOT / "repo-settings"
 OPT_IN_VALUE = "merge-queue"
 
 
@@ -118,6 +122,12 @@ def sync_ruleset(scope: str, want: dict[str, Any], check: bool) -> bool:
     return True
 
 
+def repo_settings(common: dict[str, Any], name: str) -> dict[str, Any]:
+    """The merge settings `name` should have: the common ones, then its own file's."""
+    own = SETTINGS_DIR / f"{name}.json"
+    return {**common, **(json.loads(own.read_text()) if own.exists() else {})}
+
+
 def sync_settings(repo: str, want: dict[str, Any], check: bool) -> bool:
     """Make the settings of `repo` (repos/<owner>/<name>) that `want` names match it."""
     label = f"{repo} settings"
@@ -145,12 +155,14 @@ def main() -> int:
         ok = sync_ruleset(f"orgs/{args.org}", json.loads(path.read_text()), args.check) and ok
     repos = opted_in(gh_list(f"orgs/{args.org}/properties/values"), prop["property_name"])
     print(f"repositories with {prop['property_name']}={OPT_IN_VALUE}: {', '.join(repos) or 'none'}")
-    settings = json.loads(SETTINGS_FILE.read_text())
-    # A merge-queue rule may only name a merge method the repository allows,
-    # so methods are enabled before the rulesets and disabled after them.
-    enabling = {key: value for key, value in settings.items() if key.startswith("allow_") and value is True}
+    common = json.loads(SETTINGS_FILE.read_text())
     for repo in repos:
         scope = f"repos/{args.org}/{repo}"
+        settings = repo_settings(common, repo)
+        # A merge-queue rule may only name a merge method the repository
+        # allows, so methods are enabled before the rulesets and disabled
+        # after them.
+        enabling = {key: value for key, value in settings.items() if key.startswith("allow_") and value is True}
         if not args.check:
             ok = sync_settings(scope, enabling, check=False) and ok
         for path in sorted((ROOT / "repo").glob("*.json")):
